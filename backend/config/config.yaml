@@ -1,0 +1,5 @@
+server:
+  port: 8080  # 后端服务端口
+mysql:
+  dsn: "root:123456@tcp(localhost:3306)/note_db?charset=utf8mb4&parseTime=True&loc=Local"
+  # 格式：用户名:密码@tcp(数据库地址:端口)/数据库名?参数
