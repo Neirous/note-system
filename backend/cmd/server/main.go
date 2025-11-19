@@ -2,6 +2,7 @@ package main
 
 import (
 	"note-system/config"
+	"note-system/internal/model"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,12 @@ func main() {
 		panic("数据库ping失败")
 	}
 	println("数据库连接成功！")
+
+	err = db.AutoMigrate(&model.Note{})
+	if err != nil {
+		panic("自动创建失败：" + err.Error())
+	}
+	println("notes表创建/更新成功")
 
 	router := gin.Default()
 	router.GET("/", func(c *gin.Context) {
