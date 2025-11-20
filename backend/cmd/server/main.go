@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"note-system/config"
+	"note-system/internal/handler"
 	"note-system/internal/model"
+	"note-system/internal/repository"
+	"note-system/internal/service"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -55,9 +59,28 @@ func main() {
 	}
 	println("notes表创建/更新成功")
 
-	router := gin.Default()
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{"msg": "Hello Gin!"})
-	})
-	router.Run(":" + cfg.Server.Port)
+	// 步骤3：初始化各层（依赖注入）
+	noteRepo := repository.NewNoteRepo(db)             // Repository 层
+	noteService := service.NewNoteService(noteRepo)    // Service 层
+	noteHandler := handler.NewNoteHandler(noteService) // Handler 层
+
+	// 步骤4：创建 Gin 引擎，注册路由
+	r := gin.Default() // 默认开启日志和恢复中间件
+
+	// 分组路由：/api/note
+	api := r.Group("/api/note")
+	{
+		api.POST("", noteHandler.CreateNote)       // 创建笔记
+		api.GET("/:id", noteHandler.GetNoteByID)   // 查询单条笔记
+		api.PUT("/:id", noteHandler.UpdateNote)    // 更新笔记
+		api.DELETE("/:id", noteHandler.DeleteNote) // 删除笔记
+		api.GET("/list", noteHandler.ListNotes)    // 分页查询列表
+	}
+
+	// 步骤5：启动 HTTP 服务
+	fmt.Println("服务启动成功,访问地址:http://127.0.0.1:8080")
+	err = r.Run(":8080") // 监听 8080 端口
+	if err != nil {
+		panic(fmt.Sprintf("服务启动失败：%v", err))
+	}
 }

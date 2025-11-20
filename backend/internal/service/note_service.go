@@ -16,7 +16,7 @@ type NoteService interface {
 	// UpdateNote 更新笔记，接收ID、新标题、新内容，返回错误
 	UpdateNote(id int64, newTitle, newContent string) error
 	// DeleteNote 删除笔记，接收ID，返回错误
-	Delete(id int64) error
+	DeleteNote(id int64) error
 	// ListNotes 分页查询笔记列表，接收页码和每页大小，返回笔记列表、总条数、错误
 	ListNotes(page, size int) ([]model.Note, int64, error)
 }
@@ -44,7 +44,7 @@ func (n *noteService) CreateNote(title string, content string) (*model.Note, err
 }
 
 // Delete implements NoteService.
-func (n *noteService) Delete(id int64) error {
+func (n *noteService) DeleteNote(id int64) error {
 	// 业务校验：ID 必须大于 0
 	if id <= 0 {
 		return errors.New("笔记ID不合法(必须大于0)")
