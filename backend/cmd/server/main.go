@@ -70,9 +70,9 @@ func main() {
 	r := gin.Default() // 默认开启日志和恢复中间件
 	// 新增：添加跨域中间件
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:8080"},        // 允许前端域名
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"}, // 允许的请求方法
-		AllowHeaders:     []string{"Content-Type"},                 // 允许的请求头
+		AllowOrigins:     []string{"http://localhost:8080", "http://localhost:5173"}, // 允许前端域名
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},                   // 允许的请求方法
+		AllowHeaders:     []string{"Content-Type"},                                   // 允许的请求头
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
