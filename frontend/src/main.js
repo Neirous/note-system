@@ -1,16 +1,13 @@
-import './assets/main.css'
-
 import { createApp } from 'vue'
 import App from './App.vue'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+
+// 新增：导入路由实例（类比 Go 导入路由配置）
 import router from './router'
-// 引入 mavon-editor 和其样式
-import mavonEditor from 'mavon-editor'
-import 'mavon-editor/dist/css/index.css'
 
 const app = createApp(App)
-
-app.use(router)
-// 使用 mavon-editor 插件
-app.use(mavonEditor)
+app.use(ElementPlus)
+app.use(router) // 新增：挂载路由（类比 Go 的 app.Use(router)）
 
 app.mount('#app')
