@@ -31,3 +31,15 @@ export function updateNote(id, data) {
 export function deleteNote(id) {
     return request.delete(`/note/${id}`)
 }
+
+export function getTrashList(page = 1, size = 10) {
+    return request.get('/note/trash', { params: { page, size } })
+}
+
+export function restoreNote(id) {
+    return request.put(`/note/${id}/restore`)
+}
+
+export function hardDeleteNote(id) {
+    return request.delete(`/note/${id}/hard`)
+}

@@ -81,11 +81,15 @@ func main() {
 	// 分组路由：/api/note
 	api := r.Group("/api/note")
 	{
-		api.POST("", noteHandler.CreateNote)       // 创建笔记
-		api.GET("/:id", noteHandler.GetNoteByID)   // 查询单条笔记
-		api.PUT("/:id", noteHandler.UpdateNote)    // 更新笔记
-		api.DELETE("/:id", noteHandler.DeleteNote) // 删除笔记
-		api.GET("/list", noteHandler.ListNotes)    // 分页查询列表
+		api.POST("", noteHandler.CreateNote)
+		api.GET("/:id", noteHandler.GetNoteByID)
+		api.PUT("/:id", noteHandler.UpdateNote)
+		api.DELETE("/:id", noteHandler.DeleteNote)
+		api.GET("/list", noteHandler.ListNotes)
+		api.GET("/trash", noteHandler.ListDeleted)
+		api.PUT("/:id/restore", noteHandler.Restore)
+		api.DELETE("/:id/hard", noteHandler.HardDelete)
+		api.GET("/search", noteHandler.SearchNotes)
 	}
 
 	// 步骤5：启动 HTTP 服务

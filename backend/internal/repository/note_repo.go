@@ -12,6 +12,10 @@ type NoteRepository interface {
 	Update(note *model.Note) error
 	Delete(id int64) error
 	List(page, size int) ([]model.Note, int64, error)
+	ListDeleted(page, size int) ([]model.Note, int64, error)
+	Restore(id int64) error
+	HardDelete(id int64) error
+	SearchLike(q string, limit int) ([]model.Note, error)
 }
 
 type noteRepo struct {
@@ -46,6 +50,27 @@ func (n *noteRepo) List(page int, size int) ([]model.Note, int64, error) {
 		noteList []model.Note
 		total    int64
 	)
+	err := n.db.Model(&model.Note{}).Where("is_deleted = 0").Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	err = n.db.Model(&model.Note{}).
+		Where("is_deleted = 0").
+		Order("updated_at DESC").
+		Limit(size).
+		Offset((page - 1) * size).
+		Find(&noteList).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return noteList, total, nil
+}
+
+func (n *noteRepo) ListDeleted(page int, size int) ([]model.Note, int64, error) {
+	var (
+		noteList []model.Note
+		total    int64
+	)
 	err := n.db.Model(&model.Note{}).Where("is_deleted = 1").Count(&total).Error
 	if err != nil {
 		return nil, 0, err
@@ -60,6 +85,30 @@ func (n *noteRepo) List(page int, size int) ([]model.Note, int64, error) {
 		return nil, 0, err
 	}
 	return noteList, total, nil
+}
+
+func (n *noteRepo) Restore(id int64) error {
+	return n.db.Model(&model.Note{}).
+		Where("id = ?", id).
+		Update("is_deleted", 0).Error
+}
+
+func (n *noteRepo) HardDelete(id int64) error {
+	return n.db.Delete(&model.Note{}, id).Error
+}
+
+func (n *noteRepo) SearchLike(q string, limit int) ([]model.Note, error) {
+	var list []model.Note
+	like := "%" + q + "%"
+	err := n.db.Model(&model.Note{}).
+		Where("is_deleted = 0 AND (title LIKE ? OR content LIKE ?)", like, like).
+		Order("updated_at DESC").
+		Limit(limit).
+		Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 // Update implements NoteRepository.

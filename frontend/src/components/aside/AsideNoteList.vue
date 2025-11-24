@@ -1,15 +1,10 @@
 <template>
   <div class="aside-note-list">
-    <!-- 顶部添加笔记按钮 -->
-    <el-button 
-      type="primary" 
-      size="small" 
-      style="width: 90%; margin: 10px auto; display: block;"
-      @click="addNewNote"
-      :loading="loading"
-    >
-      新建笔记
-    </el-button>
+    <div class="top-actions">
+      <el-input v-model="keyword" size="small" placeholder="搜索笔记..." clearable prefix-icon="Search" @input="onSearch" />
+      <el-button type="primary" size="small" @click="addNewNote" :loading="loading">新建笔记</el-button>
+      <el-button size="small" @click="openTrash">回收站</el-button>
+    </div>
 
     <div class="note-list-container">
       <div 
@@ -26,13 +21,17 @@
 </template>
 
 <script setup>
-import { ref, defineEmits,onMounted } from 'vue'
+import { ref, defineEmits,onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getNoteList } from '../../api/note'
+import request from '../../api/request'
 
 const noteList = ref([])
+const keyword = ref('')
 const activeIndex = ref(0)
 const loading = ref(false)
 const emit = defineEmits(['select-note', 'add-note'])
+const router = useRouter()
 
 // 加载笔记列表
 const loadNotes = async () => {
@@ -47,6 +46,16 @@ const loadNotes = async () => {
   } catch (error) {
     console.error('加载笔记失败:', error)
   }
+}
+
+const onSearch = async () => {
+  const q = keyword.value.trim()
+  if (!q) { await loadNotes(); return }
+  try {
+    const res = await request.get('/note/search', { params: { q } })
+    noteList.value = res.data.data.list || []
+    activeIndex.value = 0
+  } catch (e) { console.error(e) }
 }
 
 const selectNote = (note, index) => {
@@ -64,8 +73,21 @@ const addNewNote = () => {
   emit('add-note', newNote)
 }
 
+const openTrash = () => {
+  router.push({ name: 'TrashView' })
+}
+
 onMounted(() => {
   loadNotes()
+  const refresh = () => loadNotes()
+  window.addEventListener('note-updated', refresh)
+  window.addEventListener('note-created', refresh)
+  window.addEventListener('note-deleted', refresh)
+  onUnmounted(() => {
+    window.removeEventListener('note-updated', refresh)
+    window.removeEventListener('note-created', refresh)
+    window.removeEventListener('note-deleted', refresh)
+  })
 })
 </script>
 
@@ -78,6 +100,10 @@ onMounted(() => {
   display: flex; /* 关键：flex 布局 */
   flex-direction: column; /* 垂直排列（按钮 + 列表） */
 }
+
+.top-actions { width: 90%; margin: 10px auto; display: flex; gap: 8px; }
+.top-actions :deep(.el-input__wrapper) { border-radius: 20px; }
+.note-title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans SC', Helvetica, Arial, sans-serif; }
 
 /* 2. 列表容器：flex:1 占满剩余高度，超出滚动 */
 .note-list-container {

@@ -32,28 +32,16 @@ import HeaderTabBar from '../header/HeaderTabBar.vue'
 import { useRouter } from 'vue-router'
 import { ref } from 'vue'
 
-const currentNote = ref({})
+const currentNote = ref(null)
 const router = useRouter()
 
 const handleSelectNote = (note) => {
   currentNote.value = note
   // 如果是已有笔记，包含ID
   if (note.id) {
-    router.push({ 
-      name: 'NoteEditor', 
-      query: { 
-        id: note.id,
-        content: encodeURIComponent(note.content) 
-      } 
-    })
+    router.push({ name: 'NoteEditor', query: { id: note.id } })
   } else {
-    // 如果是新笔记，不包含ID
-    router.push({ 
-      name: 'NoteEditor', 
-      query: { 
-        content: encodeURIComponent(note.content) 
-      } 
-    })
+    router.push({ name: 'NoteEditor' })
   }
 }
 
@@ -61,42 +49,21 @@ const handleSwitchNote = (note) => {
   currentNote.value = note
   if (note.content !== undefined) {
     if (note.id) {
-      router.push({ 
-        name: 'NoteEditor', 
-        query: { 
-          id: note.id,
-          content: encodeURIComponent(note.content) 
-        } 
-      })
+      router.push({ name: 'NoteEditor', query: { id: note.id } })
     } else {
-      router.push({ 
-        name: 'NoteEditor', 
-        query: { 
-          content: encodeURIComponent(note.content) 
-        } 
-      })
+      router.push({ name: 'NoteEditor' })
     }
   }
 }
 
 const handleAddNoteFromAside = (newNote) => {
   currentNote.value = newNote
-  router.push({ 
-    name: 'NoteEditor', 
-    query: { 
-      content: encodeURIComponent(newNote.content) 
-    } 
-  })
+  router.push({ name: 'NoteEditor' })
 }
 
 const handleAddNoteFromHeader = (newNote) => {
   currentNote.value = newNote
-  router.push({ 
-    name: 'NoteEditor', 
-    query: { 
-      content: encodeURIComponent(newNote.content) 
-    } 
-  })
+  router.push({ name: 'NoteEditor' })
 }
 
 const handleCloseNote = (note) => {

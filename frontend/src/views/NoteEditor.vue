@@ -1,10 +1,39 @@
 <template>
-  <div class="note-editor-container" style="height: 100%;">
+  <div class="note-editor-container">
+    <div class="editor-toolbar">
+      <template v-if="isEditing">
+        <el-button type="primary" size="small" @click="onSave">保存</el-button>
+      </template>
+      <template v-else>
+        <el-button type="primary" size="small" @click="startEdit">编辑</el-button>
+        <el-button size="small" @click="onRename">重命名</el-button>
+        <el-popconfirm title="确认删除该笔记？" confirm-button-text="删除" cancel-button-text="取消" @confirm="onDelete">
+          <template #reference>
+            <el-button type="danger" size="small">删除</el-button>
+          </template>
+        </el-popconfirm>
+      </template>
+      <el-tag v-if="isEditing && !titleValid" type="danger" effect="plain">第一行作为标题，使用 #</el-tag>
+      <el-tag v-if="isEditing && !contentValid" type="warning" effect="plain">内容不能为空</el-tag>
+    </div>
     <mavon-editor
+      v-if="isEditing"
       v-model="noteContent"
-      style="height: 100%;"
-      placeholder="请输入笔记内容（支持 Markdown 语法）"
-      @save="saveNote"
+      class="editor"
+      :subfield="true"
+      :toolbarsFlag="true"
+      :editable="true"
+      :placeholder="editorPlaceholder"
+      @save="onSave"
+    />
+    <mavon-editor
+      v-else
+      v-model="noteContent"
+      class="editor"
+      :subfield="false"
+      :toolbarsFlag="false"
+      :editable="false"
+      defaultOpen="preview"
     />
   </div>
 </template>
@@ -12,102 +41,143 @@
 <script setup>
 import { mavonEditor } from 'mavon-editor'
 import 'mavon-editor/dist/css/index.css'
-import { ref, onMounted, watch } from 'vue'  
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { getNoteById, updateNote } from '../api/note'
+import { getNoteById, updateNote, createNote, deleteNote } from '../api/note'
+import { ElMessageBox, ElMessage } from 'element-plus'
 
-const noteContent = ref('')
 const route = useRoute()
-const currentNoteId = ref(null)
+const noteContent = ref('')
+const currentNote = ref(null)
+const isEditing = ref(true)
+const editorPlaceholder = '第一行作为标题，示例：# 我的标题\n\n下面书写正文内容'
+const TEMPLATE = '# 在此输入标题\n\n在此输入内容…'
 
-onMounted(() => {
-  updateNoteContent()
+const loadNote = async () => {
+  const id = route.query.id
+  if (id) {
+    const res = await getNoteById(id)
+    const payload = res.data && res.data.data ? res.data.data : res.data
+    currentNote.value = payload || { id }
+    noteContent.value = (currentNote.value && currentNote.value.content) || ''
+    isEditing.value = false
+  } else {
+    currentNote.value = null
+    noteContent.value = TEMPLATE
+    isEditing.value = true
+  }
+}
+
+onMounted(loadNote)
+watch(() => route.fullPath, loadNote)
+
+const titleValid = computed(() => {
+  const firstLine = (noteContent.value || '').split('\n')[0].trim()
+  return firstLine.startsWith('# ') && firstLine.length > 2
+})
+const contentValid = computed(() => {
+  const lines = (noteContent.value || '').split('\n')
+  const body = lines.slice(1).join('\n').trim()
+  return body.length > 0
 })
 
-watch(
-  () => route.query.content,  // 监听 content 参数变化
-  () => {
-    updateNoteContent()
-  }
-)
-
-const updateNoteContent = async () => {
-  // 从URL参数中尝试提取ID
-  const urlParams = new URLSearchParams(window.location.search);
-  const id = urlParams.get('id');
-  const content = urlParams.get('content');
-  
-  if (id) {
-    // 已存在的笔记
-    currentNote.value = {
-      id: parseInt(id),
-      content: decodeURIComponent(content || '')
-    }
-    noteContent.value = currentNote.value.content
-  } else if (content) {
-    // 新建但已有内容的笔记（来自其他组件传递）
-    noteContent.value = decodeURIComponent(content || '')
-    currentNote.value = {
-      content: noteContent.value
-    }
-  } else {
-    // 完全新建的笔记
-    noteContent.value = ''
-    currentNote.value = null
-  }
-}
-
-const saveNote = async (value, render) => {
+const onSave = async () => {
+  let value = noteContent.value
   try {
-    if (currentNote.value && currentNote.value.id) {
-      // 更新已存在的笔记
-      await updateNote(currentNote.value.id, {
-        title: generateTitleFromContent(value),
-        content: value
-      })
-      alert('保存成功')
-    } else {
-      // 创建新笔记
-      const res = await createNote({
-        title: generateTitleFromContent(value),
-        content: value
-      })
-      
-      // 保存成功后更新当前笔记信息
-      const newNote = res.data.data
-      currentNote.value = {
-        id: newNote.id,
-        content: newNote.content
-      }
-      
-      // 更新URL以包含新笔记ID
-      const newUrl = `${window.location.pathname}?id=${newNote.id}&content=${encodeURIComponent(newNote.content)}`
-      window.history.replaceState({}, '', newUrl)
-      
-      alert('保存成功')
+    if (!contentValid.value) { ElMessage.error('内容不能为空'); return }
+    if (!titleValid.value) {
+      value = ensureTitle(value)
+      noteContent.value = value
     }
-  } catch (error) {
-    console.error('保存失败:', error)
-    alert('保存失败: ' + (error.response?.data?.message || error.message))
+    if (currentNote.value && currentNote.value.id) {
+      const title = generateTitleFromContent(value)
+      await updateNote(currentNote.value.id, { title, content: value })
+      isEditing.value = false
+      window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNote.value.id, title } }))
+      ElMessage.success('保存成功')
+    } else {
+      const title = generateTitleFromContent(value)
+      const res = await createNote({ title, content: value })
+      const newNote = res.data.data
+      currentNote.value = newNote
+      history.replaceState({}, '', `${window.location.pathname}?id=${newNote.id}`)
+      isEditing.value = false
+      window.dispatchEvent(new CustomEvent('note-created', { detail: { id: newNote.id, title } }))
+      ElMessage.success('保存成功')
+    }
+  } catch (e) {
+    ElMessage.error('保存失败')
   }
 }
 
-// 从内容中提取标题的方法
+const startEdit = () => { isEditing.value = true }
+
+const onRename = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt('输入新的标题', '重命名', { inputValue: currentNote.value?.title || '' })
+    if (!currentNote.value || !currentNote.value.id) return
+    const newTitle = value || '未命名笔记'
+    await updateNote(currentNote.value.id, { title: newTitle, content: noteContent.value })
+    currentNote.value.title = newTitle
+    window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNote.value.id, title: newTitle } }))
+    ElMessage.success('重命名成功')
+  } catch {}
+}
+
+const onDelete = async () => {
+  if (!currentNote.value || !currentNote.value.id) return
+  try {
+    await deleteNote(currentNote.value.id)
+    window.dispatchEvent(new CustomEvent('note-deleted', { detail: { id: currentNote.value.id } }))
+    ElMessage.success('删除成功')
+    currentNote.value = null
+    noteContent.value = ''
+    isEditing.value = true
+    history.replaceState({}, '', `${window.location.pathname}`)
+  } catch (e) {
+    ElMessage.error('删除失败')
+  }
+}
+
 const generateTitleFromContent = (content) => {
-  // 查找第一个标题行作为标题
   const lines = content.split('\n')
   for (let line of lines) {
-    if (line.startsWith('# ')) {
-      return line.substring(2).trim() || '未命名笔记'
-    }
+    if (line.startsWith('# ')) return line.substring(2).trim() || '未命名笔记'
   }
-  // 如果没有找到标题，则使用内容的前20个字符
   return content.trim().substring(0, 20) || '未命名笔记'
+}
+
+const ensureTitle = (content) => {
+  const lines = content.split('\n')
+  const first = (lines[0] || '').trim()
+  if (!first) {
+    lines[0] = '# 未命名笔记'
+  } else if (first.startsWith('#') && !first.startsWith('# ')) {
+    lines[0] = '# ' + first.slice(1)
+  } else if (!first.startsWith('# ')) {
+    lines[0] = '# ' + first
+  }
+  return lines.join('\n')
 }
 </script>
 
 <style scoped>
-.note-editor-container :deep(.v-md-editor) {
+.note-editor-container {
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
+.editor-toolbar {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #e6e6e6;
+  gap: 8px;
+}
+.editor {
+  height: calc(100% - 42px);
+}
+
+:deep(.v-md-editor) { border: none; }
 </style>

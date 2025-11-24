@@ -19,6 +19,10 @@ type NoteService interface {
 	DeleteNote(id int64) error
 	// ListNotes 分页查询笔记列表，接收页码和每页大小，返回笔记列表、总条数、错误
 	ListNotes(page, size int) ([]model.Note, int64, error)
+	ListDeleted(page, size int) ([]model.Note, int64, error)
+	Restore(id int64) error
+	HardDelete(id int64) error
+	SearchLike(q string, limit int) ([]model.Note, error)
 }
 
 type noteService struct {
@@ -93,6 +97,41 @@ func (n *noteService) ListNotes(page int, size int) ([]model.Note, int64, error)
 		return nil, 0, errors.New("查询笔记列表失败:" + err.Error())
 	}
 	return list, total, nil
+}
+
+func (n *noteService) ListDeleted(page int, size int) ([]model.Note, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 || size > 100 {
+		size = 10
+	}
+	list, total, err := n.repo.ListDeleted(page, size)
+	if err != nil {
+		return nil, 0, errors.New("查询回收站失败:" + err.Error())
+	}
+	return list, total, nil
+}
+
+func (n *noteService) Restore(id int64) error {
+	if id <= 0 {
+		return errors.New("笔记ID不合法(必须大于0)")
+	}
+	return n.repo.Restore(id)
+}
+
+func (n *noteService) HardDelete(id int64) error {
+	if id <= 0 {
+		return errors.New("笔记ID不合法(必须大于0)")
+	}
+	return n.repo.HardDelete(id)
+}
+
+func (n *noteService) SearchLike(q string, limit int) ([]model.Note, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	return n.repo.SearchLike(q, limit)
 }
 
 // UpdateNote implements NoteService.

@@ -16,6 +16,11 @@ const routes = [
                 // 懒加载笔记编辑页面（后续创建，类比 Go 延迟加载资源）
                 component: () => import('../views/NoteEditor.vue')
             }
+            ,{
+                path: 'trash',
+                name: 'TrashView',
+                component: () => import('../views/TrashView.vue')
+            }
         ]
     }
 ]
