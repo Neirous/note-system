@@ -1,9 +1,15 @@
 <template>
   <div class="aside-note-list">
+    <div class="search-row">
+      <el-input v-model="keyword" size="small" placeholder="搜索笔记..." clearable :prefix-icon="Search" @input="onSearch" />
+    </div>
     <div class="top-actions">
-      <el-input v-model="keyword" size="small" placeholder="搜索笔记..." clearable prefix-icon="Search" @input="onSearch" />
       <el-button type="primary" size="small" @click="addNewNote" :loading="loading">新建笔记</el-button>
       <el-button size="small" @click="openTrash">回收站</el-button>
+    </div>
+    <div class="rag-actions">
+      <el-button size="small" @click="openRagSearch">RAG检索</el-button>
+      <el-button size="small" @click="openRagQA">RAG问答</el-button>
     </div>
 
     <div class="note-list-container">
@@ -18,6 +24,30 @@
       </div>
     </div>
   </div>
+  <el-dialog v-model="showRagSearch" title="RAG检索" width="520px">
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <el-input v-model="ragQuery" placeholder="输入检索关键词" clearable />
+      <el-button type="primary" @click="doRagSearch" :loading="ragLoading">检索</el-button>
+    </div>
+    <el-empty v-if="ragResults.length===0 && !ragLoading" description="无结果" />
+    <el-table v-else :data="ragResults" height="300" size="small" stripe>
+      <el-table-column prop="title" label="标题" min-width="220" />
+      <el-table-column prop="score" label="分数" width="100" />
+      <el-table-column label="操作" width="120">
+        <template #default="{ row }">
+          <el-button type="primary" text @click="gotoNote(row)">打开</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+  </el-dialog>
+
+  <el-dialog v-model="showRagQA" title="RAG问答" width="520px">
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <el-input v-model="qaQuestion" placeholder="输入你的问题" clearable />
+      <el-button type="primary" @click="doRagQA" :loading="qaLoading">提问</el-button>
+    </div>
+    <el-input type="textarea" :rows="10" v-model="qaAnswer" placeholder="答案将显示在这里" :disabled="qaLoading" />
+  </el-dialog>
 </template>
 
 <script setup>
@@ -25,6 +55,8 @@ import { ref, defineEmits,onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getNoteList } from '../../api/note'
 import request from '../../api/request'
+import { Search } from '@element-plus/icons-vue'
+import { ragSearch, ragQA } from '../../api/rag'
 
 const noteList = ref([])
 const keyword = ref('')
@@ -77,6 +109,54 @@ const openTrash = () => {
   router.push({ name: 'TrashView' })
 }
 
+const showRagSearch = ref(false)
+const showRagQA = ref(false)
+const ragQuery = ref('')
+const ragResults = ref([])
+const ragLoading = ref(false)
+const qaQuestion = ref('')
+const qaAnswer = ref('')
+const qaLoading = ref(false)
+
+const openRagSearch = () => { showRagSearch.value = true }
+const openRagQA = () => { showRagQA.value = true }
+
+const doRagSearch = async () => {
+  const q = ragQuery.value.trim()
+  if (!q) { ragResults.value = []; return }
+  try {
+    ragLoading.value = true
+    const res = await ragSearch(q)
+    ragResults.value = (res.data?.data?.list) || []
+  } catch (e) {
+    ragResults.value = []
+  } finally {
+    ragLoading.value = false
+  }
+}
+
+const doRagQA = async () => {
+  const q = qaQuestion.value.trim()
+  if (!q) { qaAnswer.value = ''; return }
+  try {
+    qaLoading.value = true
+    qaAnswer.value = '正在生成…'
+    const res = await ragQA(q, 180000)
+    qaAnswer.value = (res.data?.data?.answer) || ''
+  } catch (e) {
+    qaAnswer.value = '请求超时或失败，请稍候重试，或缩短问题/减少上下文。'
+  } finally {
+    qaLoading.value = false
+  }
+}
+
+const gotoNote = (row) => {
+  const id = row.note_id
+  if (!id) return
+  router.push({ name: 'NoteEditor', query: { id } })
+  showRagSearch.value = false
+}
+
 onMounted(() => {
   loadNotes()
   const refresh = () => loadNotes()
@@ -101,8 +181,10 @@ onMounted(() => {
   flex-direction: column; /* 垂直排列（按钮 + 列表） */
 }
 
-.top-actions { width: 90%; margin: 10px auto; display: flex; gap: 8px; }
-.top-actions :deep(.el-input__wrapper) { border-radius: 20px; }
+.search-row { width: 90%; margin: 10px auto 0; }
+.search-row :deep(.el-input__wrapper) { border-radius: 20px; }
+.top-actions { width: 90%; margin: 6px auto 10px; display: flex; gap: 8px; }
+.rag-actions { width: 90%; margin: 0 auto 10px; display: flex; gap: 8px; }
 .note-title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans SC', Helvetica, Arial, sans-serif; }
 
 /* 2. 列表容器：flex:1 占满剩余高度，超出滚动 */

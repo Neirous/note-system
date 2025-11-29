@@ -55,24 +55,36 @@ func main() {
 	}
 	println("数据库连接成功！")
 
-	err = db.AutoMigrate(&model.Note{})
+	err = db.AutoMigrate(&model.Note{}, &model.Fragment{}, &model.QARecord{})
 	if err != nil {
 		panic("自动创建失败：" + err.Error())
 	}
 	println("notes表创建/更新成功")
 
+	// 强制统一为 utf8mb4，避免中文出现问号
+	_ = db.Exec("SET NAMES utf8mb4").Error
+	_ = db.Exec("ALTER TABLE notes CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error
+	_ = db.Exec("ALTER TABLE fragments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error
+	_ = db.Exec("ALTER TABLE qa_records CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error
+
 	// 步骤3：初始化各层（依赖注入）
-	noteRepo := repository.NewNoteRepo(db)             // Repository 层
-	noteService := service.NewNoteService(noteRepo)    // Service 层
-	noteHandler := handler.NewNoteHandler(noteService) // Handler 层
+	noteRepo := repository.NewNoteRepo(db)          // Repository 层
+	noteService := service.NewNoteService(noteRepo) // Service 层
+	ragService := service.NewRAGService(db)
+	nh := handler.NewNoteHandler(noteService, ragService)
+	// 通过闭包方式注入 RAGService
+	func() { // anonymous init
+		// reflect injection avoided; exported field not settable here
+		// provide setter via helper
+	}()
 
 	// 步骤4：创建 Gin 引擎，注册路由
 	r := gin.Default() // 默认开启日志和恢复中间件
 	// 新增：添加跨域中间件
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:8080", "http://localhost:5173"}, // 允许前端域名
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},                   // 允许的请求方法
-		AllowHeaders:     []string{"Content-Type"},                                   // 允许的请求头
+		AllowOrigins:     []string{"http://localhost:8080", "http://localhost:5173", "http://localhost:5174"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"}, // 允许的请求方法
+		AllowHeaders:     []string{"Content-Type"},                 // 允许的请求头
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -81,20 +93,30 @@ func main() {
 	// 分组路由：/api/note
 	api := r.Group("/api/note")
 	{
-		api.POST("", noteHandler.CreateNote)
-		api.GET("/:id", noteHandler.GetNoteByID)
-		api.PUT("/:id", noteHandler.UpdateNote)
-		api.DELETE("/:id", noteHandler.DeleteNote)
-		api.GET("/list", noteHandler.ListNotes)
-		api.GET("/trash", noteHandler.ListDeleted)
-		api.PUT("/:id/restore", noteHandler.Restore)
-		api.DELETE("/:id/hard", noteHandler.HardDelete)
-		api.GET("/search", noteHandler.SearchNotes)
+		api.POST("", nh.CreateNote)
+		api.GET("/search", nh.SearchNotes)
+		api.GET("/list", nh.ListNotes)
+		api.GET("/trash", nh.ListDeleted)
+		api.PUT("/:id/restore", nh.Restore)
+		api.DELETE("/:id/hard", nh.HardDelete)
+		api.GET("/:id", nh.GetNoteByID)
+		api.PUT("/:id", nh.UpdateNote)
+		api.DELETE("/:id", nh.DeleteNote)
+		api.DELETE("/purge", nh.PurgeAll)
 	}
 
+	rag := r.Group("/api/rag")
+	{
+		rag.GET("/search", nh.RagSearch)
+		rag.POST("/qa", nh.RagQA)
+	}
+
+	// OpenAI 风格的本地模拟端点
+	r.POST("/v1/chat/completions", nh.MockLLM)
+
 	// 步骤5：启动 HTTP 服务
-	fmt.Println("服务启动成功,访问地址:http://127.0.0.1:8080")
-	err = r.Run(":8080") // 监听 8080 端口
+	fmt.Println("服务启动成功,访问地址:http://127.0.0.1:" + cfg.Server.Port)
+	err = r.Run(":" + cfg.Server.Port)
 	if err != nil {
 		panic(fmt.Sprintf("服务启动失败：%v", err))
 	}

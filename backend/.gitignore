@@ -1,0 +1,17 @@
+bin/
+build/
+tmp/
+vendor/
+docker-data/
+coverage/
+*.log
+*.out
+*.exe
+*.dll
+*.test
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.*
+*.local
