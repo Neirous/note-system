@@ -18,12 +18,22 @@ import (
 )
 
 func loadConfig() (*config.Config, error) {
-	//读取config.yaml内容
-	data, err := os.ReadFile("config/config.yaml")
+	paths := []string{"config/config.local.yaml", "config/config.yaml"}
+	var data []byte
+	var err error
+	for _, p := range paths {
+		b, e := os.ReadFile(p)
+		if e == nil && len(b) > 0 {
+			data = b
+			break
+		}
+		if err == nil {
+			err = e
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	//解析yaml内容到Config结构体
 	var cfg config.Config
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
@@ -38,6 +48,37 @@ func main() {
 	cfg, err := loadConfig()
 	if err != nil {
 		panic("加载配置失败" + err.Error())
+	}
+
+	if cfg.LLM.URL != "" {
+		_ = os.Setenv("LLM_URL", cfg.LLM.URL)
+	}
+	if cfg.LLM.Model != "" {
+		_ = os.Setenv("LLM_MODEL", cfg.LLM.Model)
+	}
+	if cfg.LLM.MaxTokens > 0 {
+		_ = os.Setenv("LLM_MAX_TOKENS", fmt.Sprintf("%d", cfg.LLM.MaxTokens))
+	}
+	if cfg.Rag.PineconeHost != "" {
+		_ = os.Setenv("PINECONE_HOST", cfg.Rag.PineconeHost)
+	}
+	if cfg.Rag.PineconeAPIKey != "" {
+		_ = os.Setenv("PINECONE_API_KEY", cfg.Rag.PineconeAPIKey)
+	}
+	if cfg.Rag.PineconeIndex != "" {
+		_ = os.Setenv("PINECONE_INDEX", cfg.Rag.PineconeIndex)
+	}
+	if cfg.Rag.EmbeddingURL != "" {
+		_ = os.Setenv("EMBEDDING_URL", cfg.Rag.EmbeddingURL)
+	}
+	if cfg.Rag.EmbedDim > 0 {
+		_ = os.Setenv("EMBED_DIM", fmt.Sprintf("%d", cfg.Rag.EmbedDim))
+	}
+	if cfg.Rag.TopK > 0 {
+		_ = os.Setenv("RAG_TOPK", fmt.Sprintf("%d", cfg.Rag.TopK))
+	}
+	if cfg.Rag.SimilarityThreshold > 0 {
+		_ = os.Setenv("SIMILARITY_THRESHOLD", fmt.Sprintf("%g", cfg.Rag.SimilarityThreshold))
 	}
 
 	db, err := gorm.Open(mysql.Open(cfg.Mysql.Dsn), &gorm.Config{})
@@ -63,6 +104,10 @@ func main() {
 
 	// 强制统一为 utf8mb4，避免中文出现问号
 	_ = db.Exec("SET NAMES utf8mb4").Error
+	_ = db.Exec("SET character_set_client = utf8mb4").Error
+	_ = db.Exec("SET character_set_connection = utf8mb4").Error
+	_ = db.Exec("SET character_set_results = utf8mb4").Error
+	_ = db.Exec("SET collation_connection = utf8mb4_unicode_ci").Error
 	_ = db.Exec("ALTER TABLE notes CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error
 	_ = db.Exec("ALTER TABLE fragments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error
 	_ = db.Exec("ALTER TABLE qa_records CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error
@@ -96,6 +141,7 @@ func main() {
 		api.POST("", nh.CreateNote)
 		api.GET("/search", nh.SearchNotes)
 		api.GET("/list", nh.ListNotes)
+		api.POST("/seed-cn", nh.SeedCNNotes)
 		api.GET("/trash", nh.ListDeleted)
 		api.PUT("/:id/restore", nh.Restore)
 		api.DELETE("/:id/hard", nh.HardDelete)

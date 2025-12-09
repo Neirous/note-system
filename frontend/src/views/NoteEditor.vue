@@ -2,7 +2,6 @@
   <div class="note-editor-container">
     <div class="editor-toolbar">
       <template v-if="isEditing">
-        <el-button type="primary" size="small" @click="onSave">保存</el-button>
       </template>
       <template v-else>
         <el-button type="primary" size="small" @click="startEdit">编辑</el-button>
@@ -36,6 +35,7 @@
       defaultOpen="preview"
     />
   </div>
+  
 </template>
 
 <script setup>
@@ -69,6 +69,7 @@ const loadNote = async () => {
 }
 
 onMounted(loadNote)
+// 文件夹功能已移除
 watch(() => route.fullPath, loadNote)
 
 const titleValid = computed(() => {
@@ -181,3 +182,4 @@ const ensureTitle = (content) => {
 
 :deep(.v-md-editor) { border: none; }
 </style>
+ 

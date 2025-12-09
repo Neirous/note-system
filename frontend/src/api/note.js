@@ -43,3 +43,5 @@ export function restoreNote(id) {
 export function hardDeleteNote(id) {
     return request.delete(`/note/${id}/hard`)
 }
+
+// 文件夹功能已移除

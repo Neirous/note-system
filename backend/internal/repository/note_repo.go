@@ -2,6 +2,7 @@ package repository
 
 import (
 	"note-system/internal/model"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -16,11 +17,14 @@ type NoteRepository interface {
 	Restore(id int64) error
 	HardDelete(id int64) error
 	SearchLike(q string, limit int) ([]model.Note, error)
+	UpdateTimes(id int64, createdAt, updatedAt time.Time) error
 }
 
 type noteRepo struct {
 	db *gorm.DB
 }
+
+// 已移除文件夹统计
 
 // Create implements NoteRepository.
 func (n *noteRepo) Create(note *model.Note) error {
@@ -118,6 +122,15 @@ func (n *noteRepo) Update(note *model.Note) error {
 		Updates(map[string]interface{}{
 			"title":   note.Title,
 			"content": note.Content,
+		}).Error
+}
+
+func (n *noteRepo) UpdateTimes(id int64, createdAt, updatedAt time.Time) error {
+	return n.db.Model(&model.Note{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"created_at": createdAt,
+			"updated_at": updatedAt,
 		}).Error
 }
 

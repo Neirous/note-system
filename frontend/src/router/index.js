@@ -12,14 +12,27 @@ const routes = [
         children: [ // 嵌套路由：子路径渲染到布局的 <router-view /> 中
             {
                 path: '', // 默认子路径（访问 / 时渲染）
-                name: 'NoteEditor', // 路由名称（方便后续跳转）
-                // 懒加载笔记编辑页面（后续创建，类比 Go 延迟加载资源）
+                redirect: 'notes'
+            }
+            , {
+                path: 'note',
+                name: 'NoteEditor',
                 component: () => import('../views/NoteEditor.vue')
             }
-            ,{
+            , {
                 path: 'trash',
                 name: 'TrashView',
                 component: () => import('../views/TrashView.vue')
+            }
+            , {
+                path: 'rag-qa',
+                name: 'RagQAView',
+                component: () => import('../views/RagQAView.vue')
+            }
+            , {
+                path: 'notes',
+                name: 'NotesListView',
+                component: () => import('../views/NotesListView.vue')
             }
         ]
     }

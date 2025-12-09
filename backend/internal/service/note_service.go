@@ -4,6 +4,7 @@ import (
 	"errors"
 	"note-system/internal/model"
 	"note-system/internal/repository"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -23,6 +24,7 @@ type NoteService interface {
 	Restore(id int64) error
 	HardDelete(id int64) error
 	SearchLike(q string, limit int) ([]model.Note, error)
+	SetNoteTimes(id int64, createdAt, updatedAt time.Time) error
 }
 
 type noteService struct {
@@ -36,10 +38,7 @@ func (n *noteService) CreateNote(title string, content string) (*model.Note, err
 		return nil, errors.New("笔记标题不能为空")
 	}
 	//构建Note模型（业务层组装数据，Repository只负责存储）
-	note := &model.Note{
-		Title:   title,
-		Content: content,
-	}
+	note := &model.Note{Title: title, Content: content}
 	//调用Repository层的Create方法，存储数据
 	if err := n.repo.Create(note); err != nil {
 		return nil, errors.New("创建笔记失败" + err.Error())
@@ -134,6 +133,8 @@ func (n *noteService) SearchLike(q string, limit int) ([]model.Note, error) {
 	return n.repo.SearchLike(q, limit)
 }
 
+// 文件夹功能已移除
+
 // UpdateNote implements NoteService.
 func (n *noteService) UpdateNote(id int64, newTitle string, newContent string) error {
 	// 业务校验 1：ID 必须大于 0
@@ -168,4 +169,11 @@ func (n *noteService) UpdateNote(id int64, newTitle string, newContent string) e
 
 func NewNoteService(repo repository.NoteRepository) NoteService {
 	return &noteService{repo: repo}
+}
+
+func (n *noteService) SetNoteTimes(id int64, createdAt, updatedAt time.Time) error {
+	if id <= 0 {
+		return errors.New("笔记ID不合法(必须大于0)")
+	}
+	return n.repo.UpdateTimes(id, createdAt, updatedAt)
 }

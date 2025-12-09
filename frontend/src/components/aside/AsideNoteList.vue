@@ -1,20 +1,25 @@
 <template>
   <div class="aside-note-list">
     <div class="search-row">
-      <el-input v-model="keyword" size="small" placeholder="搜索笔记..." clearable :prefix-icon="Search" @input="onSearch" />
+      <el-input v-model="keyword" size="small" placeholder="搜索笔记（标题/内容）" clearable :prefix-icon="Search" @input="onSearch" />
     </div>
     <div class="top-actions">
       <el-button type="primary" size="small" @click="addNewNote" :loading="loading">新建笔记</el-button>
-      <el-button size="small" @click="openTrash">回收站</el-button>
     </div>
-    <div class="rag-actions">
-      <el-button size="small" @click="openRagSearch">RAG检索</el-button>
-      <el-button size="small" @click="openRagQA">RAG问答</el-button>
+
+    <!-- 日历与标签 -->
+    <div class="calendar-block">
+      <DatePicker v-model="calendarDate" is-expanded color="teal" @dayclick="onPickDate($event.date)"/>
+      <div class="calendar-actions">
+        <el-button text size="small" @click="clearDate">清除日期筛选</el-button>
+      </div>
     </div>
+
+    
 
     <div class="note-list-container">
       <div 
-        v-for="(note, index) in noteList" 
+        v-for="(note, index) in filteredNotes" 
         :key="note.id"
         class="note-item"
         :class="{ active: activeIndex === index }"
@@ -24,57 +29,48 @@
       </div>
     </div>
   </div>
-  <el-dialog v-model="showRagSearch" title="RAG检索" width="520px">
-    <div style="display:flex; gap:8px; margin-bottom:10px;">
-      <el-input v-model="ragQuery" placeholder="输入检索关键词" clearable />
-      <el-button type="primary" @click="doRagSearch" :loading="ragLoading">检索</el-button>
-    </div>
-    <el-empty v-if="ragResults.length===0 && !ragLoading" description="无结果" />
-    <el-table v-else :data="ragResults" height="300" size="small" stripe>
-      <el-table-column prop="title" label="标题" min-width="220" />
-      <el-table-column prop="score" label="分数" width="100" />
-      <el-table-column label="操作" width="120">
-        <template #default="{ row }">
-          <el-button type="primary" text @click="gotoNote(row)">打开</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-  </el-dialog>
-
-  <el-dialog v-model="showRagQA" title="RAG问答" width="520px">
-    <div style="display:flex; gap:8px; margin-bottom:10px;">
-      <el-input v-model="qaQuestion" placeholder="输入你的问题" clearable />
-      <el-button type="primary" @click="doRagQA" :loading="qaLoading">提问</el-button>
-    </div>
-    <el-input type="textarea" :rows="10" v-model="qaAnswer" placeholder="答案将显示在这里" :disabled="qaLoading" />
-  </el-dialog>
+  
 </template>
 
 <script setup>
-import { ref, defineEmits,onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, defineEmits,onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { DatePicker } from 'v-calendar'
 import { getNoteList } from '../../api/note'
 import request from '../../api/request'
 import { Search } from '@element-plus/icons-vue'
-import { ragSearch, ragQA } from '../../api/rag'
+ 
 
 const noteList = ref([])
+const filteredNotes = computed(() => {
+  let list = [...(noteList.value || [])]
+  if (pickedDate.value) {
+    const day = fmtDate(pickedDate.value)
+    list = list.filter(n => fmtDate(n.updated_at) === day)
+  }
+  // 关键字搜索优先
+  const q = keyword.value.trim()
+  if (q) {
+    list = list.filter(n => (n.title||'').includes(q) || (n.content||'').includes(q))
+  }
+  return list
+})
+
+
 const keyword = ref('')
 const activeIndex = ref(0)
 const loading = ref(false)
 const emit = defineEmits(['select-note', 'add-note'])
-const router = useRouter()
+const route = useRoute()
+ 
 
 // 加载笔记列表
 const loadNotes = async () => {
   try {
     const res = await getNoteList(1, 100) // 获取前100条记录
     noteList.value = res.data.data.list || []
-    
-    // 默认选中第一条
-    if (noteList.value.length > 0) {
-      selectNote(noteList.value[0], 0)
-    }
+    // 主页希望停留在仓库，不自动跳转到某篇笔记
+    activeIndex.value = -1
   } catch (error) {
     console.error('加载笔记失败:', error)
   }
@@ -92,6 +88,10 @@ const onSearch = async () => {
 
 const selectNote = (note, index) => {
   activeIndex.value = index
+  if (note && note.updated_at) {
+    try { pickedDate.value = new Date(note.updated_at) } catch {}
+    try { calendarDate.value = new Date(note.updated_at) } catch {}
+  }
   emit('select-note', note)
 }
 
@@ -105,57 +105,7 @@ const addNewNote = () => {
   emit('add-note', newNote)
 }
 
-const openTrash = () => {
-  router.push({ name: 'TrashView' })
-}
-
-const showRagSearch = ref(false)
-const showRagQA = ref(false)
-const ragQuery = ref('')
-const ragResults = ref([])
-const ragLoading = ref(false)
-const qaQuestion = ref('')
-const qaAnswer = ref('')
-const qaLoading = ref(false)
-
-const openRagSearch = () => { showRagSearch.value = true }
-const openRagQA = () => { showRagQA.value = true }
-
-const doRagSearch = async () => {
-  const q = ragQuery.value.trim()
-  if (!q) { ragResults.value = []; return }
-  try {
-    ragLoading.value = true
-    const res = await ragSearch(q)
-    ragResults.value = (res.data?.data?.list) || []
-  } catch (e) {
-    ragResults.value = []
-  } finally {
-    ragLoading.value = false
-  }
-}
-
-const doRagQA = async () => {
-  const q = qaQuestion.value.trim()
-  if (!q) { qaAnswer.value = ''; return }
-  try {
-    qaLoading.value = true
-    qaAnswer.value = '正在生成…'
-    const res = await ragQA(q, 180000)
-    qaAnswer.value = (res.data?.data?.answer) || ''
-  } catch (e) {
-    qaAnswer.value = '请求超时或失败，请稍候重试，或缩短问题/减少上下文。'
-  } finally {
-    qaLoading.value = false
-  }
-}
-
-const gotoNote = (row) => {
-  const id = row.note_id
-  if (!id) return
-  router.push({ name: 'NoteEditor', query: { id } })
-  showRagSearch.value = false
-}
+// 回收站入口已搬到左侧图标栏
 
 onMounted(() => {
   loadNotes()
@@ -163,12 +113,36 @@ onMounted(() => {
   window.addEventListener('note-updated', refresh)
   window.addEventListener('note-created', refresh)
   window.addEventListener('note-deleted', refresh)
+  watch(() => route.query.id, (id) => {
+    if (!id) return
+    const list = noteList.value || []
+    const idx = list.findIndex(n => String(n.id) === String(id))
+    if (idx >= 0) {
+      selectNote(list[idx], idx)
+    }
+  }, { immediate: true })
   onUnmounted(() => {
     window.removeEventListener('note-updated', refresh)
     window.removeEventListener('note-created', refresh)
     window.removeEventListener('note-deleted', refresh)
   })
 })
+
+// Calendar & tags helpers
+const calendarDate = ref(new Date())
+const pickedDate = ref(null)
+const isToday = (d) => fmtDate(d) === fmtDate(new Date())
+const isPicked = (d) => pickedDate.value && fmtDate(d) === fmtDate(pickedDate.value)
+const onPickDate = (d) => { pickedDate.value = new Date(d) }
+const clearDate = () => { pickedDate.value = null }
+function fmtDate(dt) {
+  const date = new Date(dt)
+  const y = date.getFullYear(); const m = String(date.getMonth()+1).padStart(2,'0'); const da = String(date.getDate()).padStart(2,'0')
+  return `${y}-${m}-${da}`
+}
+
+
+
 </script>
 
 <style scoped>
@@ -181,8 +155,9 @@ onMounted(() => {
   flex-direction: column; /* 垂直排列（按钮 + 列表） */
 }
 
-.search-row { width: 90%; margin: 10px auto 0; }
-.search-row :deep(.el-input__wrapper) { border-radius: 20px; }
+.search-row { width: 92%; margin: 6px auto 8px; }
+.search-row :deep(.el-input__wrapper) { border-radius: 12px; background: #f5f6f7; box-shadow: none; border: 1px solid #e5e7eb; }
+.search-row :deep(.el-input__inner) { height: 34px; }
 .top-actions { width: 90%; margin: 6px auto 10px; display: flex; gap: 8px; }
 .rag-actions { width: 90%; margin: 0 auto 10px; display: flex; gap: 8px; }
 .note-title { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans SC', Helvetica, Arial, sans-serif; }
@@ -228,4 +203,17 @@ onMounted(() => {
   text-overflow: ellipsis;
   display: block;
 }
+
+/* Calendar style mimic memos */
+.calendar-block { width: 90%; margin: 0 auto 8px; }
+.calendar-actions { display:flex; justify-content:flex-end; }
+.date-cell { display:flex; justify-content:center; align-items:center; height: 28px; }
+.date-cell span { width: 24px; height: 24px; display:flex; align-items:center; justify-content:center; border-radius: 50%; }
+.date-cell span.today { border: 1px solid #d1d5db; }
+.date-cell span.picked { background:#9f1b1b; color:#fff; }
+.calendar-block :deep(.el-calendar) { border: none; }
+.calendar-block :deep(.el-calendar__body) { padding: 0 8px 8px; }
+.calendar-block :deep(.el-calendar__header) { padding: 8px 8px; border-bottom: none; }
+
+ 
 </style>

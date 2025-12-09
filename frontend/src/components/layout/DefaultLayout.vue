@@ -1,7 +1,13 @@
 <template>
   <div class="note-layout">
     <el-container style="height: 100%;">
-      <el-aside width="240px" style="background-color: #f5f7fa; border-right: 1px solid #e6e6e6;">
+      <!-- 左侧图标栏 -->
+      <el-aside width="64px" style="background-color:#fff;border-right:1px solid #e6e6e6;">
+        <IconBar />
+      </el-aside>
+
+      <!-- 左侧笔记侧栏（含搜索/日历/标签） -->
+      <el-aside width="320px" style="background-color: #f5f7fa; border-right: 1px solid #e6e6e6;">
         <AsideNoteList 
           @select-note="handleSelectNote"
           @add-note="handleAddNoteFromAside"
@@ -9,16 +15,7 @@
       </el-aside>
 
       <el-container style="height: 100%;">
-        <el-header style="height: 60px; padding: 0 16px; border-bottom: 1px solid #e6e6e6;">
-          <HeaderTabBar 
-            :current-note="currentNote"
-            @switch-note="handleSwitchNote"
-            @close-note="handleCloseNote"
-            @add-note="handleAddNoteFromHeader"
-          />
-        </el-header>
-
-        <el-main style="padding: 0; height: calc(100% - 60px);">
+        <el-main style="padding: 0; height: 100%;">
           <router-view />
         </el-main>
       </el-container>
@@ -28,7 +25,8 @@
 
 <script setup>
 import AsideNoteList from '../aside/AsideNoteList.vue'
-import HeaderTabBar from '../header/HeaderTabBar.vue'
+// HeaderTabBar 移除，主体直接显示视图
+import IconBar from '../aside/IconBar.vue'
 import { useRouter } from 'vue-router'
 import { ref } from 'vue'
 
